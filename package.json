@@ -13,6 +13,7 @@
   },
   "main": "./index.js",
   "dependencies": {
+    "extend": "^1.2.1",
     "pouchdb": "pouchdb/pouchdb"
   },
   "devDependencies": {
