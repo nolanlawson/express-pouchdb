@@ -8,6 +8,7 @@ var express   = require('express')
   , uuids     = require('./uuids')
   , allDbs    = require('./all-dbs')
   , histories = {}
+  , replications = require('./replications')
   , app       = module.exports = express()
   , Pouch     = module.exports.Pouch = require('pouchdb');
 
@@ -108,11 +109,25 @@ app.post('/_replicate', function (req, res, next) {
     , target = req.body.target
     , opts = { continuous: !!req.body.continuous };
 
+  console.log(JSON.stringify(req.body));
+  if (req.body.cancel) {
+    if (req.body.replication_id) {
+      replications.cancelById(req.body.replication_id);
+      return res.send(200, {ok: true, _local_id: req.body.replication_id});
+    }
+    if (req.body.source && req.body.target) {
+      replications.cancelBySourceAndTarget(req.body.source, req.body.target);
+      return res.send(200, {ok: true});
+    }
+    return res.send(400, Pouch.BAD_REQUEST);
+  }
+
   if (req.body.filter) opts.filter = req.body.filter;
   if (req.body.query_params) opts.query_params = req.body.query_params;
 
   var startDate = new Date();
-  Pouch.replicate(source, target, opts).then(function (response) {
+  var replicate = Pouch.replicate(source, target, opts);
+  replicate.then(function (response) {
     
     var historyObj = extend(true, {
       start_time: startDate.toJSON(),
@@ -148,7 +163,10 @@ app.post('/_replicate', function (req, res, next) {
 
   // if continuous pull replication return 'ok' since we cannot wait for callback
   if (target in dbs && opts.continuous) {
-    res.send(200, { ok : true });
+    replicate.on('id', function (id) {
+      replications.stash(id, source, target, replicate);
+      res.send(200, { ok : true });
+    });
   }
 
 });
